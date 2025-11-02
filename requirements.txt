@@ -1,0 +1,21 @@
+ultralytics>=8.3.0
+torch>=2.1
+opencv-python
+numpy
+pandas
+pillow
+pyyaml
+tqdm
+streamlit
+fastapi
+uvicorn
+
+# Tracking (elige uno; ByteTrack recomendado por velocidad)
+deep-sort-realtime==1.3.2   # wrapper práctico de DeepSORT  [1](https://pypi.org/project/deep-sort-realtime/)
+# Lane detection (usaremos UFLD; integraremos como submódulo simple)
+# Para correr UFLD desde tu código: torch ya incluido
+
+# (Opcional) OCR si luego quieres placa: PaddleOCR o EasyOCR
+paddleocr  # instalará PaddlePaddle acorde a tu backend  [2](https://www.paddleocr.ai/main/en/quick_start.html)[3](http://www.paddleocr.ai/main/en/version3.x/installation.html)
+# o
+easyocr     # OCR ligero multi-idioma  [4](https://pypi.org/project/easyocr/)[5](https://github.com/JaidedAI/EasyOCR)

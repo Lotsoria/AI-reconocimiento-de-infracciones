@@ -1,0 +1,5 @@
+.venv/
+data/intput/
+data/output/annotated_videos/
+data/output/evidence/
+data/output/events.csv

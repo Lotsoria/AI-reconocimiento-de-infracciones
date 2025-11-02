@@ -1,0 +1,18 @@
+# app/config/default.yaml
+video:
+  output_dir: "data/output"
+  evidence_dir: "data/output/evidence"
+
+models:
+  yolo_path: "models/yolo/yolo11n.pt"   # Ultralytics preentrenado (COCO)
+  helmet_path: "models/helmet/helmet_yolo.pt"  # Debes colocar tu .pt aquí
+
+yolo:
+  imgsz: 640
+  conf: 0.35
+
+rules:
+  red_light: true
+  helmet: true
+  speed: true
+  lane_invasion: true
