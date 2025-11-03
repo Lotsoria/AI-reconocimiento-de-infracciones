@@ -7,6 +7,7 @@
 #     pasa clean_previous=True). La UI sólo llama esto al pulsar 'Analizar'.
 # -----------------------------------------------------------------------------
 
+import contextlib
 import cv2, yaml, os, shutil
 import numpy as np
 import pandas as pd
@@ -42,18 +43,12 @@ def _clean_previous_outputs(output_dir: str, evidence_dir: str):
     Se invoca sólo cuando el caller lo solicita (clean_previous=True).
     """
     csv_path = os.path.join(output_dir, "events.csv")
-    try:
+    with contextlib.suppress(Exception):
         if os.path.exists(csv_path):
             os.remove(csv_path)
-    except Exception:
-        pass
-
-    try:
+    with contextlib.suppress(Exception):
         if os.path.exists(evidence_dir):
             shutil.rmtree(evidence_dir)
-    except Exception:
-        pass
-
     os.makedirs(evidence_dir, exist_ok=True)
 
 class Pipeline:

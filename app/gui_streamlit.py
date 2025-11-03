@@ -141,16 +141,16 @@ st.title("Detección de Infracciones de Tránsito")
 _init_session()
 
 # --- Panel lateral de diagnóstico (opcional) ---
-with st.sidebar.expander("Diagnóstico", expanded=False):
-    st.write("Root del repo:", f"`{ROOT}`")
-    st.write("Video subido (tmp):", st.session_state.get("uploaded_video_path"))
-    st.write("Video salida:", st.session_state.get("out_video_path"))
-    if st.session_state.get("out_video_path"):
-        try:
-            size = os.path.getsize(st.session_state["out_video_path"])
-            st.write("Tamaño salida (bytes):", size)
-        except Exception:
-            st.write("Tamaño salida (bytes): error al leer")
+# with st.sidebar.expander("Diagnóstico", expanded=False):
+#     st.write("Root del repo:", f"`{ROOT}`")
+#     st.write("Video subido (tmp):", st.session_state.get("uploaded_video_path"))
+#     st.write("Video salida:", st.session_state.get("out_video_path"))
+#     if st.session_state.get("out_video_path"):
+#         try:
+#             size = os.path.getsize(st.session_state["out_video_path"])
+#             st.write("Tamaño salida (bytes):", size)
+#         except Exception:
+#             st.write("Tamaño salida (bytes): error al leer")
 
 # Parámetros de inferencia (no disparan procesamiento por sí mismos)
 col1, col2 = st.columns(2)
