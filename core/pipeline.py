@@ -23,6 +23,7 @@ from core.rules.red_light import RedLightRule
 from core.rules.helmet import HelmetRule
 from core.rules.speed import SpeedRule
 from core.rules.lane_invasion import LaneInvasionRule
+from core.utils.model_io import ensure_local_model
 
 def _load_config(path):
     with open(path, 'r') as f:
@@ -64,14 +65,50 @@ class Pipeline:
             imgsz=self.cfg["yolo"]["imgsz"],
             conf=self.cfg["yolo"]["conf"]
         )
-        # Helmet (opcional)
-        try:
-            self.helmet_detector = HelmetDetector(
-                model_path=self.cfg["models"]["helmet_path"],
-                imgsz=self.cfg["yolo"]["imgsz"],
-                conf=0.35
-            )
-        except Exception:
+        # Helmet (opcional): resolver ruta del modelo de casco y descargar si falta.
+        # Reglas: preferimos no bloquear; si no hay modelo, lo registramos claro.
+        def _resolve_helmet_path(cfg_models) -> str | None:
+            # 1) Config / Env
+            path = cfg_models.get("helmet_path") or os.environ.get("HELMET_MODEL_PATH")
+            if path and os.path.exists(path):
+                return path
+            # 2) Buscar cualquier .pt en models/helmet
+            base_dir = os.path.join(os.getcwd(), "models", "helmet")
+            with contextlib.suppress(Exception):
+                if os.path.isdir(base_dir):
+                    for name in os.listdir(base_dir):
+                        if name.lower().endswith(".pt"):
+                            return os.path.join(base_dir, name)
+            # 3) Devolver lo que haya (aunque no exista) para permitir descarga
+            return path
+
+        h_url  = self.cfg["models"].get("helmet_url") or os.environ.get("HELMET_MODEL_URL")
+        h_path = _resolve_helmet_path(self.cfg["models"])
+        print(f"[Pipeline] Ruta modelo casco resuelta: {h_path or 'Ninguna'}")
+        if h_path and (not os.path.exists(h_path)) and h_url:
+            try:
+                ensure_local_model(h_path, h_url)
+            except Exception as e:
+                print(f"[Pipeline] No se pudo descargar el modelo de casco: {e}")
+
+        # Instancia detector de casco si el archivo existe finalmente
+        if h_path and os.path.exists(h_path):
+            try:
+                print(f"[Pipeline] Cargando modelo de casco desde: {h_path}")
+                hcfg = self.cfg.get("helmet", {})
+                helmet_imgsz = hcfg.get("imgsz", self.cfg["yolo"]["imgsz"])  # permitir imgsz distinto para casco
+                helmet_conf  = hcfg.get("conf", 0.30)
+                print(f"[Pipeline] Modelo de casco: {h_path}")
+                self.helmet_detector = HelmetDetector(
+                    model_path=h_path,
+                    imgsz=helmet_imgsz,
+                    conf=helmet_conf,
+                )
+            except Exception as e:
+                print(f"[Pipeline] Error cargando modelo de casco: {e}")
+                self.helmet_detector = None
+        else:
+            print("[Pipeline] Modelo de casco no encontrado. Coloca un .pt en models/helmet o configura HELMET_MODEL_URL.")
             self.helmet_detector = None
 
         # Lanes (MVP sencillo; luego puedes integrar UFLD sin tocar el resto)
@@ -82,8 +119,13 @@ class Pipeline:
 
         # Reglas activas
         self.rules = []
-        if self.cfg["rules"].get("red_light"):     self.rules.append(RedLightRule(self.cfg))
-        if self.cfg["rules"].get("helmet"):        self.rules.append(HelmetRule(self.cfg))
+        # Activa regla de casco solo si hay modelo listo (evita falsos positivos)
+        if self.cfg["rules"].get("helmet") and self.helmet_detector is not None:
+            print("[Pipeline] Regla de casco ACTIVADA")
+            self.rules.append(HelmetRule(self.cfg))
+        else:
+            if self.cfg["rules"].get("helmet"):
+                print("[Pipeline] Regla de casco DESACTIVADA (no hay modelo)")
         if self.cfg["rules"].get("speed"):         self.rules.append(SpeedRule(self.cfg))
         if self.cfg["rules"].get("lane_invasion"): self.rules.append(LaneInvasionRule(self.cfg))
 
@@ -126,11 +168,12 @@ class Pipeline:
                 # 1) Detección base
                 base_dets = self.detector.infer(frame)
 
-                # 2) Casco (si modelo disponible)
-                helmet_dets = self.helmet_detector.infer(frame) if self.helmet_detector else []
-
-                # 3) Tracking
+                # 2) Tracking
                 tracks = self.tracker.update(base_dets, frame)
+
+                # 3) Casco (sólo si parece necesario: persona + moto presentes)
+                need_helmet = any(t["label"]=="person" for t in tracks) and any(t["label"]=="motorbike" for t in tracks)
+                helmet_dets = self.helmet_detector.infer(frame) if (self.helmet_detector and need_helmet) else []
 
                 # 4) Lanes (MVP)
                 lane_info = self.lane_detector.infer(frame)

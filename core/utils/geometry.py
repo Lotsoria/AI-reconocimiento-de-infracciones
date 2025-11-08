@@ -1,5 +1,3 @@
-# core/utils/geometry.py
-# Utilidades geométricas: cruces de línea, intersecciones, centro bbox, etc.
 import numpy as np
 
 def center_of(bbox):

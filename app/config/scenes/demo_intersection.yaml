@@ -26,7 +26,16 @@ speed:
   limit_kmh: 40
 
 helmet:
-  min_persistence_frames: 6  # frames consecutivos sin casco para reportar
+  # Frames consecutivos SIN casco necesarios para reportar (más alto = menos falsos positivos)
+  min_persistence_no_helmet: 12
+  # Distancia máxima px para asociar persona↔moto (muy grande puede emparejar mal)
+  max_person_moto_dist: 120
+  # Proporción superior del bbox de persona usada como 'cabeza' (sube si el casco queda más abajo)
+  head_roi_top_ratio: 0.45
+  # IoU mínimo casco↔cabeza para considerar 'tiene casco' (más bajo = más tolerante)
+  helmet_iou_thresh: 0.08
+  # Confianza mínima del detector de casco (sube si hay falsos positivos de casco)
+  helmet_conf_min: 0.30
 
 lane:
   persistence_frames: 5

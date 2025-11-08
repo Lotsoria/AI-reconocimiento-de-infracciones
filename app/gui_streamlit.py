@@ -165,7 +165,7 @@ conf = col2.slider(
 video_file = st.file_uploader("Sube un video (MP4/MOV/AVI)", type=["mp4", "mov", "avi"])
 
 # Botón de análisis: SOLO aquí se dispara el pipeline
-run_clicked = st.button("Analizar video", type="primary", use_container_width=True)
+run_clicked = st.button("Analizar video", type="primary", width='stretch')
 
 # Config de escena (usa ruta ABSOLUTA)
 scene_cfg = P("app", "config", "scenes", "demo_intersection.yaml")
@@ -240,7 +240,7 @@ if st.session_state["processed"]:
     df = st.session_state["events_df"]
     df_view = _build_df_view_es(df)
     st.subheader("Eventos detectados")
-    st.dataframe(df_view, use_container_width=True)
+    st.dataframe(df_view, width='stretch')
 
     # Selección de evento y previsualización de evidencia (NO procesa, sólo lee de disco)
     if not df.empty:
@@ -278,9 +278,9 @@ if st.session_state["processed"]:
 
             # Muestra recorte si existe; si no, el frame completo
             if isinstance(ruta_recorte, str) and ruta_recorte and os.path.exists(ruta_recorte):
-                st.image(ruta_recorte, caption="Recorte (evidencia)", use_column_width=True)
+                st.image(ruta_recorte, caption="Recorte (evidencia)", width='stretch')
             elif isinstance(ruta_imagen, str) and ruta_imagen and os.path.exists(ruta_imagen):
-                st.image(ruta_imagen, caption="Frame completo (evidencia)", use_column_width=True)
+                st.image(ruta_imagen, caption="Frame completo (evidencia)", width='stretch')
             else:
                 st.info("No se encontró la imagen de evidencia en disco.")
 
@@ -292,7 +292,7 @@ if st.session_state["processed"]:
             data=st.session_state["events_df"].to_csv(index=False).encode("utf-8"),
             file_name="eventos.csv",
             mime="text/csv",
-            use_container_width=True,
+            width='stretch',
         )
 else:
     st.info("Sube un video y presiona **Analizar video** para iniciar el procesamiento.")

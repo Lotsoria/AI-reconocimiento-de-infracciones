@@ -5,11 +5,19 @@ video:
 
 models:
   yolo_path: "models/yolo/yolo11n.pt"   # Ultralytics preentrenado (COCO)
-  helmet_path: "models/helmet/helmet_yolo.pt"  # Debes colocar tu .pt aquí
+  helmet_path: "models/helmet/helmet_yolo.pt"  # Se auto-descarga si 'helmet_url' está configurada
+  # URL por defecto (pública) para auto-descarga del modelo de casco
+  # Fuente: Hugging Face (ultralyticsplus/yolov8n-helmet)
+  helmet_url: "https://huggingface.co/ultralyticsplus/yolov8n-helmet/resolve/main/model.pt"
 
 yolo:
   imgsz: 640
   conf: 0.35
+
+helmet:
+  # Permite usar una resolución distinta para casco (objetos pequeños)
+  imgsz: 768
+  conf: 0.30
 
 rules:
   red_light: true
