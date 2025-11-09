@@ -31,14 +31,21 @@ class HelmetRule:
         # con la clave anterior 'min_persistence_frames' si existe.
         self.no_helmet_need = hcfg.get("min_persistence_no_helmet",
                                        hcfg.get("min_persistence_frames", 6))
+        # Frames consecutivos con casco para limpiar el estado "activo"
+        self.helmet_need = hcfg.get("min_persistence_helmet", 3)
+        # Enfría reportes repetidos (segundos mínimos entre logs del mismo id)
+        self.min_gap = float(hcfg.get("min_gap_seconds", 3.0))
         # Parámetros de asociación y verificación
         self.max_dist = hcfg.get("max_person_moto_dist", 140)   # px
         self.head_ratio = hcfg.get("head_roi_top_ratio", 0.38)  # 38% superior del bbox
         self.iou_thr = hcfg.get("helmet_iou_thresh", 0.12)      # IoU mínimo casco↔cabeza
         self.conf_min = hcfg.get("helmet_conf_min", 0.25)       # conf mínima detección casco
 
-        # Estado por id de persona: contador de frames sin casco
-        self.neg = {}
+        # Estado por id de persona
+        self.neg = {}              # frames consecutivos sin casco
+        self.pos = {}              # frames consecutivos con casco
+        self.active = set()        # ids en violación activa (ya reportados)
+        self.last_report = {}      # id -> timestamp del último reporte
 
     def _associate_people_to_motos(self, tracks):
         """Empareja cada persona con su moto más cercana si está dentro de max_dist."""
@@ -80,12 +87,20 @@ class HelmetRule:
                     break
 
             if not has_helmet:
-                # Acumula frames negativos y reporta al alcanzar persistencia
+                # Acumula frames negativos y resetea positivos
                 self.neg[pid] = self.neg.get(pid, 0) + 1
+                self.pos[pid] = 0
+                # Al alcanzar persistencia, emite un único reporte por violación
                 if self.neg[pid] >= self.no_helmet_need:
-                    logger.log("no_helmet", ts, pid, p["bbox"], extra={"moto_id": m["id"]}, frame=frame)
-                    # evita spam manteniendo el contador en el umbral
-                    self.neg[pid] = self.no_helmet_need
+                    last = self.last_report.get(pid, -1e9)
+                    if (pid not in self.active) and (ts - last >= self.min_gap):
+                        logger.log("no_helmet", ts, pid, p["bbox"], extra={"moto_id": m["id"]}, frame=frame)
+                        self.active.add(pid)
+                        self.last_report[pid] = ts
             else:
-                # Vemos casco: resetea el contador negativo
+                # Vemos casco: acumula positivos y resetea negativos
+                self.pos[pid] = self.pos.get(pid, 0) + 1
                 self.neg[pid] = 0
+                # Si mantiene casco por algunos frames, limpia estado activo
+                if self.pos[pid] >= self.helmet_need and pid in self.active:
+                    self.active.remove(pid)

@@ -1,15 +1,17 @@
-# core/pipeline.py
 # -----------------------------------------------------------------------------
-# Orquesta el flujo:
-#   lectura -> detección -> tracking -> reglas -> overlays -> writer + log
-# Importante:
-#   - Limpia evidencias y CSV al comenzar un NUEVO análisis (cuando el caller
-#     pasa clean_previous=True). La UI sólo llama esto al pulsar 'Analizar'.
+# Orquesta el flujo principal del análisis de video:
+#   1) Abrir lector (VideoCapture) del video de entrada
+#   2) Abrir escritor (VideoWriter) del video anotado de salida
+#   3) Por cada frame: detección YOLO -> tracking -> reglas -> overlays -> write
+#   4) Las reglas que detectan infracciones llaman a EventLogger.log(), el cual
+#      guarda una captura del frame completo y un recorte (crop) del objeto.
+#   5) Al final, se devuelve la ruta final del video anotado y los eventos leídos
+#      desde el CSV generado.
 # -----------------------------------------------------------------------------
 
 import contextlib
-import cv2, yaml, os, shutil
-import numpy as np
+import yaml, os, shutil
+import time
 import pandas as pd
 
 from core.utils.video_io import open_video_reader, open_video_writer, release_safely
@@ -19,7 +21,6 @@ from core.detectors.yolo_detector import YoloDetector
 from core.detectors.helmet_detector import HelmetDetector
 from core.detectors.lane_detector import SimpleLaneDetector
 from core.trackers.deepsort_wrapper import DeepSortWrapper
-from core.rules.red_light import RedLightRule
 from core.rules.helmet import HelmetRule
 from core.rules.speed import SpeedRule
 from core.rules.lane_invasion import LaneInvasionRule
@@ -28,7 +29,6 @@ from core.utils.model_io import ensure_local_model
 def _load_config(path):
     with open(path, 'r') as f:
         cfg = yaml.safe_load(f)
-    # Soporte 'include' para heredar defaults
     if "include" in cfg:
         with open(cfg["include"], 'r') as f:
             base = yaml.safe_load(f)
@@ -36,13 +36,8 @@ def _load_config(path):
         cfg = base
     return cfg
 
+# Borrar recursos previos
 def _clean_previous_outputs(output_dir: str, evidence_dir: str):
-    """
-    Borra:
-      - CSV de eventos (si existe)
-      - Carpeta de evidencias (y la recrea vacía)
-    Se invoca sólo cuando el caller lo solicita (clean_previous=True).
-    """
     csv_path = os.path.join(output_dir, "events.csv")
     with contextlib.suppress(Exception):
         if os.path.exists(csv_path):
@@ -134,20 +129,34 @@ class Pipeline:
 
     def process_video(self, in_path, out_path, clean_previous=True):
         """
-        Ejecuta el análisis del video y produce:
-          - video anotado en 'out_path'
-          - CSV 'data/output/events.csv' con encabezados en español
-          - evidencias (frames y recortes) en data/output/evidence/
+        Ejecuta el análisis del video y produce tres artefactos:
+          - Video anotado (bounding boxes, HUD y líneas guía), escrito frame a
+            frame por el VideoWriter. La ruta exacta puede ajustar la extensión
+            según el códec disponible (ver core/utils/video_io.py).
+          - CSV 'data/output/events.csv' con eventos detectados.
+          - Evidencias en disco (capturas del frame y recortes del bbox) por
+            cada infracción detectada, gestionadas por EventLogger.log().
+
+        Parámetros:
+          - in_path: ruta del video fuente
+          - out_path: ruta deseada del video de salida (se puede ajustar .mp4/.webm/.avi)
+          - clean_previous: si True, limpia CSV y evidencias antes de empezar
         """
         if clean_previous:
             _clean_previous_outputs(self.cfg["video"]["output_dir"], self.cfg["video"]["evidence_dir"])
             self.logger = EventLogger(self.cfg["video"]["output_dir"], self.cfg["video"]["evidence_dir"])
 
 
+        # Marca de tiempo inicial para medir duración del análisis completo
+        t0 = time.perf_counter()
+
         # core/pipeline.py (dentro de process_video)
+        # 1) Abrir lector del video de entrada: devuelve handle + tamaño + FPS
         cap, w, h, fps = open_video_reader(in_path)
 
         # >>> CAMBIO: open_video_writer ahora devuelve (writer, out_path_final)
+        # 2) Abrir escritor del video anotado. Devuelve el writer y la ruta
+        #    final del archivo (la extensión puede variar según códec elegido).
         writer, out_path_final = open_video_writer(out_path, fps, (w, h))
 
 
@@ -165,20 +174,23 @@ class Pipeline:
                 frame_idx += 1
                 ts = frame_idx / fps
 
-                # 1) Detección base
+                # 1) Detección base (YOLO sobre el frame actual)
                 base_dets = self.detector.infer(frame)
 
-                # 2) Tracking
+                # 2) Tracking (asigna IDs persistentes a las detecciones)
                 tracks = self.tracker.update(base_dets, frame)
 
-                # 3) Casco (sólo si parece necesario: persona + moto presentes)
+                # 3) Casco (sólo si hay persona + moto en escena para ahorrar cómputo)
                 need_helmet = any(t["label"]=="person" for t in tracks) and any(t["label"]=="motorbike" for t in tracks)
                 helmet_dets = self.helmet_detector.infer(frame) if (self.helmet_detector and need_helmet) else []
 
-                # 4) Lanes (MVP)
+                # 4) Lanes (MVP con Canny+Hough; usado por reglas de carril)
                 lane_info = self.lane_detector.infer(frame)
 
-                # 5) Reglas
+                # 5) Reglas (helmet / speed / lane invasion)
+                #    IMPORTANTE: cuando una regla confirma infracción, llama a
+                #    self.logger.log(...), que escribe una foto del frame y el
+                #    recorte del bbox a data/output/evidence/<tipo>/...
                 for rule in self.rules:
                     if rule.__class__.__name__ == "HelmetRule":
                         rule.update(frame, tracks, ts, self.logger, helmet_dets=helmet_dets)
@@ -187,7 +199,7 @@ class Pipeline:
                     else:
                         rule.update(frame, tracks, ts, self.logger)
 
-                # 6) Overlays (visual)
+                # 6) Overlays (visual) sobre el frame que será escrito a disco
                 for t in tracks:
                     txt = f"ID {t['id']} {t['label']}"
                     draw_box(frame, t["bbox"], text=txt)
@@ -196,13 +208,23 @@ class Pipeline:
                 draw_line(frame, B1, B2, color=(255,255,0))   # speed B
                 draw_hud(frame, f"FPS: {fps:.1f} | Frame: {frame_idx}")
 
-                # 7) Escritura frame anotado
+                # 7) Escritura del frame anotado al video de salida
                 writer.write(frame)
 
-            # Devuelve DataFrame para integraciones programáticas (la UI lo vuelve a leer del CSV)
+            # Devuelve DataFrame para integraciones programáticas (la UI lo lee del CSV)
             csv_path = os.path.join(self.cfg["video"]["output_dir"], "events.csv")
             df = pd.read_csv(csv_path) if os.path.exists(csv_path) else pd.DataFrame()
-            return {"events_df": df, "out_path_final": out_path_final}
+            # Medición de rendimiento: duración total y FPS de procesamiento
+            t1 = time.perf_counter()
+            processing_seconds = max(0.0, t1 - t0)
+            processing_fps = (frame_idx / processing_seconds) if processing_seconds > 0 else 0.0
+            return {
+                "events_df": df,
+                "out_path_final": out_path_final,
+                "processing_seconds": processing_seconds,
+                "processing_fps": processing_fps,
+            }
 
         finally:
+            # 8) Liberar recursos de video (lector y escritor)
             release_safely(cap, writer)

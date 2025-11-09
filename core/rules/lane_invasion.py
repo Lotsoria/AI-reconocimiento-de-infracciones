@@ -1,6 +1,3 @@
-# core/rules/lane_invasion.py
-# Marca invasión si el centro del vehículo entra al polígono prohibido.
-# Evita duplicados mediante persistencia y cooldown.
 from core.utils.geometry import center_of, point_in_polygon
 
 class LaneInvasionRule:

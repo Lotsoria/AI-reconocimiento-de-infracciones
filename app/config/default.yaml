@@ -1,4 +1,3 @@
-# app/config/default.yaml
 video:
   output_dir: "data/output"
   evidence_dir: "data/output/evidence"

@@ -1,6 +1,3 @@
-# core/detectors/lane_detector.py
-# MVP: detector de carriles simple (Canny + Hough) como sustituto ligero.
-# Luego puedes integrar UFLD aquí sin tocar el resto del pipeline.
 import cv2
 import numpy as np
 

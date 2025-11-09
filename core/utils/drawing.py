@@ -1,4 +1,3 @@
-# core/utils/drawing.py
 # Overlays y HUD sencillos
 import cv2
 import numpy as np

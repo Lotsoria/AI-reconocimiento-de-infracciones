@@ -1,4 +1,3 @@
-# core/detectors/yolo_detector.py
 from ultralytics import YOLO
 import torch
 

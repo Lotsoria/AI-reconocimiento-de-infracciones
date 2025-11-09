@@ -1,4 +1,3 @@
-# app/gui_streamlit.py
 # -----------------------------------------------------------------------------
 # GUI con Streamlit para detección de infracciones de tránsito
 #
@@ -200,6 +199,9 @@ if run_clicked:
             res = pipe.process_video(in_path, out_path, clean_previous=True)
             st.session_state["processed"]    = True
             st.session_state["out_video_path"] = res.get("out_path_final", out_path)
+            # Guarda métricas de duración y FPS de procesamiento para mostrar en la GUI
+            st.session_state["processing_seconds"] = float(res.get("processing_seconds") or 0.0)
+            st.session_state["processing_fps"] = float(res.get("processing_fps") or 0.0)
 
 
         # 5) Guardar resultados en sesión
@@ -228,6 +230,11 @@ if st.session_state["processed"]:
     if out_path and os.path.exists(out_path) and os.path.getsize(out_path) > 0:
 
         st.success("¡Análisis completado! Reproduciendo salida…")
+        # Muestra duración y FPS aproximado de procesamiento (medido en el pipeline)
+        secs = float(st.session_state.get("processing_seconds") or 0.0)
+        pfps = float(st.session_state.get("processing_fps") or 0.0)
+        if secs > 0:
+            st.caption(f"Tiempo de análisis: {secs:.2f} s  •  ~{pfps:.1f} FPS de procesamiento")
         # Leer como BYTES -> más robusto que pasar la ruta
         try:
             st.video(out_path)

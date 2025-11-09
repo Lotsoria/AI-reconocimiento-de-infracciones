@@ -1,4 +1,3 @@
-# app/config/scenes/demo_intersection.yaml
 include: "app/config/default.yaml"
 
 geometry:
@@ -16,18 +15,13 @@ geometry:
   # Polígono que no debe cruzarse (línea continua / carril contrario)
   no_cross_polygon: [[610,180],[670,180],[700,900],[580,900]]
 
-sem_light:
-  roi: [100, 100, 180, 220]  # ROI del semáforo (x1,y1,x2,y2)
-  red_threshold: 1.3         # Umbral de rojizo (R/G) para "rojo"
-
-speed:
-  pixel_distance: 120        # distancia en px entre líneas A y B
-  k_calibration: 0.18        # factor m/pix (ajusta con referencia real)
-  limit_kmh: 40
-
 helmet:
   # Frames consecutivos SIN casco necesarios para reportar (más alto = menos falsos positivos)
   min_persistence_no_helmet: 12
+  # Frames consecutivos CON casco para limpiar estado activo
+  min_persistence_helmet: 3
+  # Segundos mínimos entre reportes del mismo ID (evita spam de capturas)
+  min_gap_seconds: 3.0
   # Distancia máxima px para asociar persona↔moto (muy grande puede emparejar mal)
   max_person_moto_dist: 120
   # Proporción superior del bbox de persona usada como 'cabeza' (sube si el casco queda más abajo)

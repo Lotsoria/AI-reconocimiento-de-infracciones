@@ -1,5 +1,3 @@
-# core/trackers/deepsort_wrapper.py
-# Wrapper de deep-sort-realtime (rápido y sencillo de usar)
 from deep_sort_realtime.deepsort_tracker import DeepSort
 
 class DeepSortWrapper:
